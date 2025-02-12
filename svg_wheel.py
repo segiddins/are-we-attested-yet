@@ -80,7 +80,7 @@ def add_fraction(wheel, packages, total):
     }
 
     # Packages with some sort of wheel
-    wheel_packages = sum(package["wheel"] for package in packages)
+    wheel_packages = sum(1 for package in packages if package["wheel"])
 
     packages_with_wheels = et.SubElement(
         wheel,

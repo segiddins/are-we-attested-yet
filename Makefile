@@ -8,7 +8,7 @@ help:
 
 .PHONY: generate
 generate: $(VENV)
-	wget https://hugovk.github.io/top-pypi-packages/top-pypi-packages-30-days.min.json -O top-pypi-packages.json
+	wget https://raw.githubusercontent.com/segiddins/rubygems-org-db-dumps/refs/heads/main/sigstore_adoption.csv -O sigstore_adoption.csv
 	$(VENV_BIN)/python generate.py
 
 .PHONY: live

@@ -1,31 +1,22 @@
+import csv
 import datetime
 import json
 
 import pytz
 import requests_cache
 
-BASE_URL = "https://pypi.org"
-# Provenance began to be persisted on 2024-10-03
-# And `pypa/gh-action-pypi-publish` turned it automatically on 2024-10-29
-ATTESTATION_ENABLEMENT = datetime.datetime(2024, 10, 29, tzinfo=datetime.timezone.utc)
+BASE_URL = "https://rubygems.org"
+# And `rubygems/release-gem` turned it automatically on 2024-11-20
+ATTESTATION_ENABLEMENT = datetime.datetime(2024, 11, 20)
 
 PUBLISHER_URLS = (
     "https://github.com",
     "http://github.com",
-    "http://gitlab.com",
-    "https://gitlab.com",
+    # "http://gitlab.com",
+    # "https://gitlab.com",
 )
 
 DEPRECATED_PACKAGES = {
-    "BeautifulSoup",
-    "bs4",
-    "distribute",
-    "django-social-auth",
-    "nose",
-    "pep8",
-    "pycrypto",
-    "pypular",
-    "sklearn",
 }
 
 # Keep responses for one hour
@@ -33,47 +24,34 @@ SESSION = requests_cache.CachedSession("requests-cache", expire_after=60 * 60)
 
 
 def get_simple_url(package_name):
-    return f"{BASE_URL}/simple/{package_name}/"
-
-
-def get_json_url(package_name, version):
-    return f"{BASE_URL}/pypi/{package_name}/{version}/json"
+    return f"{BASE_URL}/api/v1/gems/{package_name}.json"
 
 
 def annotate_wheels(packages):
-    print("Getting wheel data...")
+    print("Getting gem data...")
     num_packages = len(packages)
     for index, package in enumerate(packages):
         print(index + 1, num_packages, package["name"])
-        has_provenance = False
-        latest_upload = None
+        has_provenance = package["has_attestation"]
+        latest_upload = datetime.datetime.fromisoformat(package["latest_release"])
         from_supported_publisher = False
         url = get_simple_url(package["name"])
         simple_response = SESSION.get(
-            url, headers={"Accept": "application/vnd.pypi.simple.v1+json"}
+            url, headers={"Accept": "application/json"}
         )
         if simple_response.status_code != 200:
-            print(" ! Skipping " + package["name"])
+            print(" ! Skipping " + package["name"] + " ({})".format(simple_response.status_code))
             continue
         simple = simple_response.json()
 
-        latest_file = simple["files"][-1]
-        if latest_file.get("provenance", None):
-            has_provenance = True
-
-        latest_version = simple["versions"][-1]
-        version_response = SESSION.get(get_json_url(package["name"], latest_version))
-        version_response.raise_for_status()
-        version_json = version_response.json()
-        project_urls = version_json["info"]["project_urls"] or {}
-        for url in project_urls.values():
-            if url.startswith(PUBLISHER_URLS):
+        uris = [(k, v) for (k, v) in 
+                [(k, v) for (k,v) in simple['metadata'].items() if k.endswith("_uri")] + [(k, v) for (k,v) in simple.items() if k.endswith("_uri")]
+                if v
+        ]
+        uris = set(uris)
+        for (_, value) in uris:
+            if value.startswith(PUBLISHER_URLS):
                 from_supported_publisher = True
-
-        for file in simple["files"]:
-            upload_time = datetime.datetime.fromisoformat(file["upload-time"])
-            if not latest_upload or upload_time > latest_upload:
-                latest_upload = upload_time
 
         package["wheel"] = has_provenance
 
@@ -87,30 +65,34 @@ def annotate_wheels(packages):
             package["css_class"] = "unsupported"
             package["icon"] = ""
             package["title"] = (
-                "This package is published from a source that doesn't support attestations (yet!)"
+                "This package is published from a source that doesn't support attestations (yet!)\n{}\nThis package was last uploaded {}".format(
+                    uris,
+                     latest_upload.strftime("%Y-%m-%d"))
             )
         elif latest_upload < ATTESTATION_ENABLEMENT:
             package["css_class"] = "default"
             package["icon"] = "⏰"
             package["title"] = (
-                "This package was last uploaded before PEP 740 was enabled."
+                "This package was last uploaded {}".format(latest_upload.strftime("%Y-%m-%d"))
             )
         else:
             package["css_class"] = "warning"
             package["icon"] = ""
             package["title"] = "This package doesn't provide attestations (yet!)"
 
+        package["title"] += "\n30 day downloads: {:,}".format(int(package["downloads"]))
+
 
 def get_top_packages():
     print("Getting packages...")
 
-    with open("top-pypi-packages.json") as data_file:
-        packages = json.load(data_file)["rows"]
+    with open("sigstore_adoption.csv") as data_file:
+        packages = list(csv.DictReader(data_file))
 
     # Rename keys
     for package in packages:
-        package["downloads"] = package.pop("download_count")
-        package["name"] = package.pop("project")
+        package["downloads"] = package.pop("total_downloads")
+        package["has_attestation"] = package.pop("has_attestation") == "True"
 
     return packages
 
