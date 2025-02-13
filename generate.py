@@ -6,14 +6,12 @@ from utils import (
     save_to_file,
 )
 
-TO_CHART = 360
 
-
-def main(to_chart: int = TO_CHART) -> None:
+def main(to_chart: int) -> None:
     packages = remove_irrelevant_packages(get_top_packages(), to_chart)
     annotate_wheels(packages)
     save_to_file(packages, "results.json")
-    generate_svg_wheel(packages, to_chart)
+    generate_svg_wheel(packages, len(packages))
 
 
 if __name__ == "__main__":
@@ -23,7 +21,7 @@ if __name__ == "__main__":
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument(
-        "-n", "--number", type=int, default=TO_CHART, help="number of packages to chart"
+        "-n", "--number", type=int, help="number of packages to chart", default=None
     )
     args = parser.parse_args()
 

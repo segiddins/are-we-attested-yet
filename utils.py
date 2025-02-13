@@ -16,8 +16,7 @@ PUBLISHER_URLS = (
     # "https://gitlab.com",
 )
 
-DEPRECATED_PACKAGES = {
-}
+DEPRECATED_PACKAGES = {}
 
 # Keep responses for one hour
 SESSION = requests_cache.CachedSession("requests-cache", expire_after=60 * 60)
@@ -36,20 +35,26 @@ def annotate_wheels(packages):
         latest_upload = datetime.datetime.fromisoformat(package["latest_release"])
         from_supported_publisher = False
         url = get_simple_url(package["name"])
-        simple_response = SESSION.get(
-            url, headers={"Accept": "application/json"}
-        )
+        simple_response = SESSION.get(url, headers={"Accept": "application/json"})
         if simple_response.status_code != 200:
-            print(" ! Skipping " + package["name"] + " ({})".format(simple_response.status_code))
+            print(
+                " ! Skipping "
+                + package["name"]
+                + " ({})".format(simple_response.status_code)
+            )
             continue
         simple = simple_response.json()
 
-        uris = [(k, v) for (k, v) in 
-                [(k, v) for (k,v) in simple['metadata'].items() if k.endswith("_uri")] + [(k, v) for (k,v) in simple.items() if k.endswith("_uri")]
-                if v
+        uris = [
+            (k, v)
+            for (k, v) in [
+                (k, v) for (k, v) in simple["metadata"].items() if k.endswith("_uri")
+            ]
+            + [(k, v) for (k, v) in simple.items() if k.endswith("_uri")]
+            if v
         ]
         uris = set(uris)
-        for (_, value) in uris:
+        for _, value in uris:
             if value.startswith(PUBLISHER_URLS):
                 from_supported_publisher = True
 
@@ -65,15 +70,16 @@ def annotate_wheels(packages):
             package["css_class"] = "unsupported"
             package["icon"] = ""
             package["title"] = (
-                "This package is published from a source that doesn't support attestations (yet!)\n{}\nThis package was last uploaded {}".format(
-                    uris,
-                     latest_upload.strftime("%Y-%m-%d"))
+                "This package is published from a source that doesn't support attestations (yet!)\nThis package was last uploaded {}\n{}".format(
+                    latest_upload.strftime("%Y-%m-%d"),
+                    "\n".join(sorted([f"* {k}: {v}" for (k, v) in uris])),
+                )
             )
         elif latest_upload < ATTESTATION_ENABLEMENT:
             package["css_class"] = "default"
             package["icon"] = "⏰"
-            package["title"] = (
-                "This package was last uploaded {}".format(latest_upload.strftime("%Y-%m-%d"))
+            package["title"] = "This package was last uploaded {}".format(
+                latest_upload.strftime("%Y-%m-%d")
             )
         else:
             package["css_class"] = "warning"
@@ -104,7 +110,9 @@ def not_deprecated(package):
 def remove_irrelevant_packages(packages, limit):
     print("Removing cruft...")
     active_packages = list(filter(not_deprecated, packages))
-    return active_packages[:limit]
+    if limit:
+        return active_packages[:limit]
+    return active_packages
 
 
 def save_to_file(packages, file_name):
