@@ -8,7 +8,7 @@ help:
 
 .PHONY: generate
 generate: $(VENV)
-	wget https://raw.githubusercontent.com/segiddins/rubygems-org-db-dumps/refs/heads/main/sigstore_adoption.csv -O sigstore_adoption.csv
+	$(VENV_BIN)/python download_sigstore_adoption.py
 	$(VENV_BIN)/python generate.py
 
 .PHONY: live
